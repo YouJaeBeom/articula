@@ -95,7 +95,7 @@ __all__ = [
     "ConfigurationError",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 # Library-level logger — NullHandler so libraries stay silent by default;
 # the application controls log routing.

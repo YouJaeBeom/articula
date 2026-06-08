@@ -1,9 +1,11 @@
 README.md
 pyproject.toml
 src/articula/__init__.py
+src/articula/_adapters.py
 src/articula/_browser.py
 src/articula/_extractor.py
 src/articula/_fetcher.py
+src/articula/_metadata.py
 src/articula/_scraper.py
 src/articula/exceptions.py
 src/articula/models.py
@@ -12,6 +14,7 @@ src/articula.egg-info/SOURCES.txt
 src/articula.egg-info/dependency_links.txt
 src/articula.egg-info/requires.txt
 src/articula.egg-info/top_level.txt
+tests/test_adapters.py
 tests/test_all_strategies_exhaustion_fetch_error.py
 tests/test_async_shared_scraper.py
 tests/test_body_validation_extraction_error.py
@@ -27,6 +30,7 @@ tests/test_confidence.py
 tests/test_context_manager.py
 tests/test_date_formats_pipeline.py
 tests/test_exceptions.py
+tests/test_extract_walls_and_merge.py
 tests/test_extraction_error_factory.py
 tests/test_extraction_error_strategies_tried.py
 tests/test_extraction_failure_escalates.py
@@ -40,6 +44,7 @@ tests/test_live_marker_registration.py
 tests/test_live_smoke.py
 tests/test_marker_exclusion_stub.py
 tests/test_meaningful_body.py
+tests/test_metadata.py
 tests/test_models.py
 tests/test_normalize_date.py
 tests/test_normalize_date_pipeline.py

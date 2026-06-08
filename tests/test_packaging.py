@@ -239,7 +239,10 @@ class TestPyprojectMetadata:
 
     @pytest.fixture(scope="class")
     def pyproject(self) -> dict:  # type: ignore[type-arg]
-        import tomllib
+        try:
+            import tomllib  # Python 3.11+
+        except ModuleNotFoundError:  # Python 3.10
+            import tomli as tomllib  # type: ignore[no-redef]
 
         root = _project_root()
         with open(root / "pyproject.toml", "rb") as fh:
@@ -251,10 +254,10 @@ class TestPyprojectMetadata:
     def test_version_defined(self, pyproject: dict) -> None:  # type: ignore[type-arg]
         assert pyproject["project"]["version"]
 
-    def test_requires_python_ge_311(self, pyproject: dict) -> None:  # type: ignore[type-arg]
+    def test_requires_python_ge_310(self, pyproject: dict) -> None:  # type: ignore[type-arg]
         req = pyproject["project"]["requires-python"]
-        assert "3.11" in req or "3.1" in req, (
-            f"requires-python should target >=3.11, got {req!r}"
+        assert "3.10" in req, (
+            f"requires-python should target >=3.10, got {req!r}"
         )
 
     def test_base_dependencies_defined(self, pyproject: dict) -> None:  # type: ignore[type-arg]

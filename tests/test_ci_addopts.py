@@ -20,7 +20,10 @@ These two properties together guarantee that:
 
 from __future__ import annotations
 
-import tomllib
+try:
+    import tomllib  # Python 3.11+
+except ModuleNotFoundError:  # Python 3.10
+    import tomli as tomllib  # type: ignore[no-redef]
 from pathlib import Path
 
 # ---------------------------------------------------------------------------

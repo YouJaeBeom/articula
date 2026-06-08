@@ -14,16 +14,16 @@ from articula import Scraper, ScraperError
 
 # (label, url, category)
 MATRIX = [
-    ("EN news (BBC)", "https://www.bbc.com/news/world-us-canada-68672500", "news"),
-    ("EN news (Guardian)", "https://www.theguardian.com/technology/2024/jan/10/ai-chatbots", "news"),
-    ("EN news (AP)", "https://apnews.com/hub/artificial-intelligence", "news"),
-    ("KO news (Yonhap)", "https://www.yna.co.kr/view/AKR20240101000100001", "news_ko"),
+    ("EN news (BBC)", "https://www.bbc.com/news/articles/cj0g4425zmeo", "news"), # 잘 못함
+    ("EN news (Guardian)", "https://www.theguardian.com/world/live/2026/jun/07/israel-lebanon-southern-beirut-hezbollah-idf-ceasefire-iran-latest-news-updates", "news"),
+    ("EN news (AP)", "https://apnews.com/article/world-cup-fifa-security-secret-service-trump-32f04baf3a242395f26816292a9dc7e2", "news"),
+    ("KO news (Yonhap)", "https://www.yna.co.kr/view/AKR20260608020900005?section=industry/all&site=hot_news_view_swipe01", "news_ko"),
     ("KO news (Hani)", "https://www.hani.co.kr/arti/economy/economy_general/1100000.html", "news_ko"),
     ("Blog (Overreacted)", "https://overreacted.io/a-complete-guide-to-useeffect/", "blog"),
     ("Dev blog (Simon W)", "https://simonwillison.net/2024/Dec/31/llms-in-2024/", "blog"),
     ("JS/SPA (Vercel blog)", "https://vercel.com/blog/framework-defined-infrastructure", "js"),
     ("Bot-protected (Cloudflare)", "https://www.cloudflare.com/learning/bots/what-is-a-bot/", "bot"),
-    ("Medium", "https://medium.com/@addyosmani/start-performance-budgeting-dad82d5a2b9e", "blog"),
+    ("Medium", "https://medium.com/design-bootcamp/i-sat-in-engineering-meetings-for-two-years-without-understanding-what-a-branch-was-c106ce7cadf8", "blog"), #안됨
 ]
 
 

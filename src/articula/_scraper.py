@@ -23,6 +23,7 @@ from typing import Any, NoReturn, TypeVar
 # fetch_browser is re-exported here (and patched by tests via
 # articula._scraper.fetch_browser) even though the escalation path uses the
 # persistent-browser variant fetch_with_existing_browser.
+from articula._adapters import SiteAdapter, get_adapter
 from articula._browser import fetch_browser, fetch_with_existing_browser  # noqa: F401
 from articula._extractor import ExtractionResult, extract
 from articula._fetcher import FetchResult, fetch_rotation, fetch_static
@@ -309,10 +310,23 @@ class Scraper:
         """
         cfg = self._config
 
+        # Site adapters handle hosts the generic pipeline cannot (Naver iframe,
+        # MSN content API). rewrite_url runs before everything else.
+        adapter = get_adapter(url)
+        if adapter is not None:
+            url = adapter.rewrite_url(url)
+
         if cfg.respect_robots:
             await self._check_robots(url)
 
         deadline = time.monotonic() + cfg.timeout
+
+        # Adapter fetch override (e.g. MSN's JSON API) — try before the tiers.
+        if adapter is not None and not cfg.force_strategy:
+            article = await self._try_adapter_override(adapter, url, deadline)
+            if article is not None:
+                return article
+
         tiers: tuple[str, ...] = (
             (cfg.force_strategy,) if cfg.force_strategy else _ALL_TIERS
         )
@@ -336,6 +350,14 @@ class Scraper:
 
             any_fetch_succeeded = True
 
+            # Adapters may narrow the HTML to the real content container
+            # (e.g. Naver's .se-main-container) before extraction.
+            html = fetch_result.html
+            if adapter is not None:
+                isolated = adapter.isolate_content(html, fetch_result.resolved_url)
+                if isolated:
+                    html = isolated
+
             # A tier that returns HTML has not "won" until that HTML yields a
             # meaningful article body.  extract() raises ValueError when no
             # extractor produces a usable body (e.g. a JavaScript shell page or
@@ -343,7 +365,7 @@ class Scraper:
             # escalating — most importantly to the browser tier, which renders
             # JS — rather than giving up on the static HTML.
             try:
-                extraction = extract(fetch_result.html, fetch_result.resolved_url)
+                extraction = extract(html, fetch_result.resolved_url)
             except ValueError as exc:
                 last_extraction_error = exc
                 logger.debug(
@@ -371,6 +393,33 @@ class Scraper:
             message=str(last_extraction_error) if last_extraction_error else "",
             cause=last_extraction_error,
         )
+
+    async def _try_adapter_override(
+        self, adapter: SiteAdapter, url: str, deadline: float
+    ) -> Article | None:
+        """Run an adapter's fetch override (e.g. MSN API); None if it does not apply.
+
+        Adapter failures never break the pipeline — they fall through to the
+        normal fetch tiers.
+        """
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return None
+        try:
+            override = await adapter.fetch_override(
+                url, timeout=remaining, proxy_url=self._config.proxy_url
+            )
+        except Exception as exc:  # noqa: BLE001 — adapter must never propagate
+            logger.debug("Adapter fetch_override error for %s: %s", url, exc)
+            return None
+        if override is None:
+            return None
+        try:
+            extraction = extract(override.html, override.resolved_url)
+        except ValueError:
+            logger.debug("Adapter override produced no body for %s — falling back", url)
+            return None
+        return _build_article(override, extraction, ["adapter"])
 
     # ------------------------------------------------------------------
     # Lazy browser lifecycle

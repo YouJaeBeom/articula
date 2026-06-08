@@ -57,3 +57,64 @@ def test_live_async_scrape_english() -> None:
     assert article.title
     assert article.text
     assert article.detected_language == "en"
+
+
+# ---------------------------------------------------------------------------
+# Real-world hard cases (regressions for the v0.2 extraction fixes)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.live
+def test_live_bbc_article_body_not_promo() -> None:
+    """BBC: real article body (not a related-video promo) + JSON-LD metadata."""
+    from articula import scrape
+
+    a = scrape("https://www.bbc.com/news/articles/cj0g4425zmeo")
+    assert a.title and "stabbing" in a.title.lower()
+    assert len(a.text) > 800, "expected the full article, not a promo blurb"
+    assert a.author  # filled from JSON-LD
+    assert a.published_date
+
+
+@pytest.mark.live
+def test_live_msn_via_content_api() -> None:
+    """MSN: article recovered through the assets.msn.com content API adapter."""
+    from articula import scrape
+
+    a = scrape(
+        "https://www.msn.com/en-us/news/politics/top-takeaways-from-trumps-"
+        "contentious-rainy-meet-the-press-interview/ar-AA252lKk?ocid=BingNewsVerp"
+    )
+    assert a.title
+    assert len(a.text) > 1500
+    assert a.published_date
+
+
+@pytest.mark.live
+def test_live_naver_blog_iframe() -> None:
+    """Naver: follow the iframe to PostView and extract the SmartEditor body."""
+    from articula import scrape
+
+    a = scrape("https://blog.naver.com/balahk/224302042478")
+    assert a.title
+    assert len(a.text) > 800
+    assert a.detected_language == "ko"
+
+
+@pytest.mark.live
+def test_live_medium_returns_content_or_clean_wall_error() -> None:
+    """Medium is Cloudflare/member-gated: either we extract it, or we raise a
+    clear ScraperError — never silently return the login/500 wall text."""
+    from articula import ScraperError, scrape
+
+    try:
+        a = scrape(
+            "https://medium.com/design-bootcamp/i-sat-in-engineering-meetings-for-"
+            "two-years-without-understanding-what-a-branch-was-c106ce7cadf8"
+        )
+    except ScraperError:
+        return  # acceptable: blocked, but surfaced as a clean typed error
+    # If it succeeded, it must be the real article, not the wall.
+    assert len(a.text) > 400
+    assert "500 Apologies" not in a.text
+    assert "Performing security verification" not in a.text

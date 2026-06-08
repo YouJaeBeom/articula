@@ -16,7 +16,7 @@ from typing import Literal
 # ---------------------------------------------------------------------------
 
 StrategyTier = Literal["static", "headers_rotation", "browser"]
-ExtractionMethod = Literal["trafilatura", "readability", "heuristic"]
+ExtractionMethod = Literal["trafilatura", "readability", "heuristic", "jsonld"]
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +113,7 @@ class Article:
             )
 
     def _validate_extraction_method(self) -> None:
-        valid: tuple[str, ...] = ("trafilatura", "readability", "heuristic")
+        valid: tuple[str, ...] = ("trafilatura", "readability", "heuristic", "jsonld")
         if self.extraction_method not in valid:
             raise ValueError(
                 f"extraction_method must be one of {valid!r}, got {self.extraction_method!r}"

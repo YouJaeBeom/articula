@@ -47,7 +47,24 @@ return on tier 1 without ever launching a browser); the hard path still works.
 
 Content extraction itself cascades too:
 **trafilatura → readability-lxml → heuristic**, taking the first that produces a
-substantive body. Dates are normalized to ISO 8601; language is auto-detected.
+substantive body. Title/author/date are cross-checked against **JSON-LD** and
+Open Graph metadata (more reliable than guessing DOM nodes), and login / paywall
+/ bot-challenge pages are detected and rejected rather than returned as the
+article. Dates are normalized to ISO 8601; language is auto-detected.
+
+### Site-specific handling
+
+A few platforms defeat generic scraping and ship dedicated adapters:
+
+- **Naver blog** (`blog.naver.com`) — follows the `mainFrame` iframe to the
+  real `PostView` document and extracts the SmartEditor content container.
+- **MSN** (`msn.com`) — pulls the article from MSN's public content API instead
+  of the un-scrapable client-rendered DOM.
+
+Generic news/blogs (BBC, Guardian, WordPress, Ghost, Medium*, …) are handled by
+the standard pipeline. *Member-only or Cloudflare-gated pages may be
+unreachable; in that case `articula` raises a clear `ScraperError` rather than
+returning the wall text.
 
 ---
 
@@ -72,7 +89,7 @@ configuration required. Without it, `articula` still does static + readability
 extraction and degrades gracefully with a clear, actionable error when a page
 genuinely needs JS rendering.
 
-Requires **Python 3.11+**.
+Requires **Python 3.10+**.
 
 ---
 

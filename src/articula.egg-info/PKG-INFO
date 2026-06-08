@@ -1,23 +1,22 @@
 Metadata-Version: 2.4
 Name: articula
-Version: 0.1.0
+Version: 0.2.0
 Summary: Extract clean structured article data from URLs with tiered escalation strategies
-Author: articula contributors
+Author-email: you jaebeom <dbwo4011@gmail.com>
 License: MIT
-Project-URL: Homepage, https://github.com/articula/articula
-Project-URL: Repository, https://github.com/articula/articula
-Project-URL: Issues, https://github.com/articula/articula/issues
+Project-URL: Homepage, https://pypi.org/project/articula/
 Keywords: scraping,article,extraction,web,nlp
 Classifier: Development Status :: 3 - Alpha
 Classifier: Intended Audience :: Developers
 Classifier: License :: OSI Approved :: MIT License
 Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
 Classifier: Programming Language :: Python :: 3.11
 Classifier: Programming Language :: Python :: 3.12
 Classifier: Programming Language :: Python :: 3.13
 Classifier: Topic :: Internet :: WWW/HTTP :: Indexing/Search
 Classifier: Topic :: Software Development :: Libraries :: Python Modules
-Requires-Python: >=3.11
+Requires-Python: >=3.10
 Description-Content-Type: text/markdown
 Requires-Dist: httpx>=0.27
 Requires-Dist: trafilatura>=1.12
@@ -34,6 +33,7 @@ Requires-Dist: pytest-asyncio>=0.23; extra == "dev"
 Requires-Dist: pytest-cov>=5.0; extra == "dev"
 Requires-Dist: mypy>=1.10; extra == "dev"
 Requires-Dist: ruff>=0.4; extra == "dev"
+Requires-Dist: tomli>=2.0; python_version < "3.11" and extra == "dev"
 
 # articula
 
@@ -84,7 +84,24 @@ return on tier 1 without ever launching a browser); the hard path still works.
 
 Content extraction itself cascades too:
 **trafilatura → readability-lxml → heuristic**, taking the first that produces a
-substantive body. Dates are normalized to ISO 8601; language is auto-detected.
+substantive body. Title/author/date are cross-checked against **JSON-LD** and
+Open Graph metadata (more reliable than guessing DOM nodes), and login / paywall
+/ bot-challenge pages are detected and rejected rather than returned as the
+article. Dates are normalized to ISO 8601; language is auto-detected.
+
+### Site-specific handling
+
+A few platforms defeat generic scraping and ship dedicated adapters:
+
+- **Naver blog** (`blog.naver.com`) — follows the `mainFrame` iframe to the
+  real `PostView` document and extracts the SmartEditor content container.
+- **MSN** (`msn.com`) — pulls the article from MSN's public content API instead
+  of the un-scrapable client-rendered DOM.
+
+Generic news/blogs (BBC, Guardian, WordPress, Ghost, Medium*, …) are handled by
+the standard pipeline. *Member-only or Cloudflare-gated pages may be
+unreachable; in that case `articula` raises a clear `ScraperError` rather than
+returning the wall text.
 
 ---
 
@@ -109,7 +126,7 @@ configuration required. Without it, `articula` still does static + readability
 extraction and degrades gracefully with a clear, actionable error when a page
 genuinely needs JS rendering.
 
-Requires **Python 3.11+**.
+Requires **Python 3.10+**.
 
 ---
 
