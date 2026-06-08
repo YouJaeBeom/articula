@@ -1,0 +1,256 @@
+Metadata-Version: 2.4
+Name: articula
+Version: 0.1.0
+Summary: Extract clean structured article data from URLs with tiered escalation strategies
+Author: articula contributors
+License: MIT
+Project-URL: Homepage, https://github.com/articula/articula
+Project-URL: Repository, https://github.com/articula/articula
+Project-URL: Issues, https://github.com/articula/articula/issues
+Keywords: scraping,article,extraction,web,nlp
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Topic :: Internet :: WWW/HTTP :: Indexing/Search
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: httpx>=0.27
+Requires-Dist: trafilatura>=1.12
+Requires-Dist: readability-lxml>=0.8
+Requires-Dist: langdetect>=1.0.9
+Requires-Dist: python-dateutil>=2.9
+Requires-Dist: fake-useragent>=1.5
+Requires-Dist: urllib3>=2.0
+Provides-Extra: browser
+Requires-Dist: playwright>=1.44; extra == "browser"
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.23; extra == "dev"
+Requires-Dist: pytest-cov>=5.0; extra == "dev"
+Requires-Dist: mypy>=1.10; extra == "dev"
+Requires-Dist: ruff>=0.4; extra == "dev"
+
+# articula
+
+**Give it a URL, get the article.** `articula` extracts the clean, structured
+content of a news story, column, or blog post from a single URL — the **title**,
+**body text**, **author**, and **published date** — and escalates through
+progressively stronger strategies so that bot detection and JavaScript-rendered
+pages don't stop it.
+
+```python
+from articula import scrape
+
+article = scrape("https://example.com/some-news-article")
+print(article.title)
+print(article.author, article.published_date)
+print(article.text)
+```
+
+It is **not** a general-purpose crawler or a structured-data scraper. It does
+one thing well: turn an article URL into a clean record.
+
+---
+
+## Why another scraper?
+
+Most "fetch the page and run readability" approaches fall over on exactly the
+pages you care about:
+
+- **Bot walls** — Cloudflare / "Just a moment…" interstitials, `403`/`429`
+  responses, naive-client blocks.
+- **JavaScript-rendered bodies** — the article isn't in the initial HTML; it's
+  injected by a client-side framework after load.
+
+`articula` handles both by **escalating through tiers** and only stopping when a
+tier produces a genuinely usable article body:
+
+| Tier | Strategy | Cost |
+|-----:|----------|------|
+| 1 | **static** — plain HTTP GET with sensible headers | cheapest |
+| 2 | **headers_rotation** — full browser-like header set, User-Agent rotation, bot-challenge detection | cheap |
+| 3 | **browser** — headless Chromium (Playwright) renders JS, then extracts | heaviest |
+
+Crucially, a tier "wins" only when its HTML yields a **meaningful body**. If the
+static HTML is just a JavaScript shell or a challenge page, extraction fails and
+`articula` escalates — all the way to the browser tier, which renders the page
+like a real user before extracting. The cheap path stays fast (real articles
+return on tier 1 without ever launching a browser); the hard path still works.
+
+Content extraction itself cascades too:
+**trafilatura → readability-lxml → heuristic**, taking the first that produces a
+substantive body. Dates are normalized to ISO 8601; language is auto-detected.
+
+---
+
+## Installation
+
+The base package is deliberately lightweight (no browser binaries):
+
+```bash
+pip install articula
+```
+
+To unlock the JavaScript-rendering / anti-bot **browser tier**, install the
+extra and the Chromium binary:
+
+```bash
+pip install "articula[browser]"
+playwright install chromium
+```
+
+With the extra installed, the browser tier engages automatically — no
+configuration required. Without it, `articula` still does static + readability
+extraction and degrades gracefully with a clear, actionable error when a page
+genuinely needs JS rendering.
+
+Requires **Python 3.11+**.
+
+---
+
+## Usage
+
+### Synchronous (scripts, CLIs)
+
+```python
+from articula import scrape
+
+article = scrape("https://example.com/article")
+```
+
+### Asynchronous (FastAPI, async pipelines)
+
+```python
+from articula import async_scrape
+
+article = await async_scrape("https://example.com/article")
+```
+
+The sync `scrape()` raises a clear error if called from inside a running event
+loop — use `async_scrape()` there instead.
+
+### Reusing a browser across many URLs (efficient batch)
+
+```python
+from articula import Scraper
+
+async with Scraper(timeout=45) as scraper:
+    a = await scraper.scrape("https://example.com/one")
+    b = await scraper.scrape("https://example.com/two")
+    # one headless browser is launched lazily and reused
+```
+
+### Batch with bounded concurrency
+
+```python
+from articula import scrape_many          # sync
+# from articula import async_scrape_many  # async equivalent
+
+# returns results in input order; per-URL errors are captured, not fatal
+results = scrape_many(urls, concurrency_limit=4)
+for url, result in zip(urls, results):
+    if isinstance(result, Exception):
+        print(url, "failed:", result)
+    else:
+        print(url, "->", result.title)
+```
+
+In async code use `await async_scrape_many(urls, concurrency_limit=4)` instead —
+`scrape_many()` raises if called from inside a running event loop.
+
+### Options
+
+Every entry point accepts the same power-user knobs (all optional):
+
+```python
+scrape(
+    url,
+    timeout=30.0,            # total wall-clock budget, seconds
+    max_retries=3,           # transient-failure retries (429/503/network)
+    custom_headers={...},    # extra request headers
+    custom_user_agent="…",   # override the User-Agent
+    proxy_url="http://…",    # route through a proxy
+    force_strategy="browser",# pin to one tier (e.g. skip straight to browser)
+    respect_robots=False,    # see "Responsible use" below
+)
+```
+
+---
+
+## The `Article` model
+
+`scrape()` returns a frozen `Article`:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `title` | `str` | core field |
+| `text` | `str` | cleaned body, core field |
+| `author` | `str \| None` | best-effort |
+| `published_date` | `str \| None` | ISO 8601, best-effort |
+| `resolved_url` | `str` | final URL after redirects |
+| `strategy_tier` | `str` | `"static"` / `"headers_rotation"` / `"browser"` |
+| `extraction_method` | `str` | `"trafilatura"` / `"readability"` / `"heuristic"` |
+| `extraction_confidence` | `float` | `0.0`–`1.0` quality signal |
+| `detected_language` | `str` | BCP-47, e.g. `"en"`, `"ko"` |
+| `strategies_attempted` | `tuple[str, ...]` | escalation trail |
+
+**Partial success is success.** As long as a body is extracted, you get an
+`Article` — `author`/`published_date` are simply `None` when not found. Use
+`extraction_confidence` to decide how much to trust a result.
+
+### Errors
+
+`articula` raises only on genuine failure (it never silently returns junk):
+
+```
+ScraperError
+├── FetchError       # page unreachable after all tiers (network, 4xx/5xx, unsolved challenge)
+├── ExtractionError  # page fetched, but no meaningful body could be extracted
+├── BrowserNotInstalledError
+├── RobotsDisallowedError
+└── ConfigurationError
+```
+
+`FetchError` and `ExtractionError` carry `.url` and `.strategies_attempted` for
+debugging.
+
+---
+
+## Responsible use
+
+`articula` defaults to **ignoring `robots.txt`** (`respect_robots=False`) because
+its purpose is to retrieve content that friction sometimes hides. That power
+comes with responsibility:
+
+- Scrape only content you are allowed to access.
+- Respect site terms of service and applicable law.
+- Rate-limit your requests; don't hammer origins.
+- Pass `respect_robots=True` to honor `robots.txt` when appropriate.
+
+You are responsible for how you use this tool.
+
+---
+
+## Logging
+
+`articula` uses the standard `logging` module under the `articula` logger with a
+`NullHandler` attached, so it's silent until you configure logging:
+
+```python
+import logging
+logging.getLogger("articula").setLevel(logging.DEBUG)
+logging.basicConfig()
+```
+
+Tier escalation, status codes, and timings are logged at `DEBUG`.
+
+---
+
+## License
+
+MIT
